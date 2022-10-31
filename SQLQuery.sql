@@ -13,6 +13,7 @@ where	a.Cust_ID = b.Cust_ID
 		and e.Ship_ID = b.Ship_ID
 ;
 
+select * from combined_table
 --2.Find the top 3 customers who have the maximum count of orders.
 
 
@@ -24,13 +25,11 @@ order by 3 desc;
 --3.Create a new column at combined_table as DaysTakenForShipping that contains the date difference of Order_Date and Ship_Date
 
 
-alter table combined_table2
-add DaysTakenForShipping2 as  datediff(day, Order_Date, Ship_Date )
+alter table combined_table
+add DaysTakenForShipping as  datediff(day, Order_Date, Ship_Date )
 
 select *
 from combined_table;
-
-select * from combined_table2
 
 --4.Find the customer whose order took the maximum time to get shipping.
 
@@ -58,6 +57,10 @@ group by month(a.Order_Date);
 
 
 
+
+
+--exist ile kullandýðýmýzda in gibi kullanabildik.
+
 -- 6.Write a query to return for each user the time elapsed between the first purchasing 
 -- and the third purchasing, in ascending order by Customer ID.
 
@@ -84,7 +87,79 @@ where row_num = 1 or row_num=3)
 
 select	Cust_ID, Customer_Name,
 		DATEDIFF(DAY,first_order, third_order) day_betwn_order
-from t3;
+from t3 order by 1
+
+
+select Cust_ID, Ord_ID, Order_Date from combined_table where Cust_ID in ('Cust_1730', 'Cust_431', 'Cust_799') order by 1,2
+---  865 sonuç çýkýyor--
+
+--owen--
+WITH T1 AS
+(
+SELECT	 Cust_ID, Ord_ID, Order_Date,
+		MIN (Order_Date) OVER (PARTITION BY Cust_ID) first_order,
+		DENSE_RANK() OVER (PARTITION BY Cust_ID ORDER BY Order_Date, Ord_ID) ORDER_NUM
+FROM	combined_table
+)
+SELECT Cust_ID, Ord_ID, Order_Date, first_order, Order_num,
+		DATEDIFF(DAY, first_order, order_date)
+FROM	T1
+WHERE	ORDER_NUM = 3
+
+----
+
+--fredy3768**
+
+with t1 as
+(
+select distinct Cust_ID,Order_Date,
+				min(Order_Date) over (partition by Cust_ID) first_order,
+				dense_rank() over (partition by Cust_ID  order by Order_Date) rank_order
+from combined_table
+)
+select Cust_ID,datediff(day,first_order,Order_Date) elapsed_day
+from t1
+where rank_order = 3
+order by 1 ;
+
+
+--mehmet4526--hatalý sonuç
+WITH CTE AS
+(
+SELECT Ord_ID,Order_Date, Cust_ID,
+FIRST_VALUE (Order_Date) OVER (PARTITION BY Cust_ID ORDER BY Order_Date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS first_order_date,
+ROW_NUMBER() OVER (PARTITION BY Cust_ID ORDER BY Order_Date) AS RN
+FROM DBO.combined_table
+)
+SELECT Cust_ID, first_order_date, Order_Date AS third_order_date, DATEDIFF(DAY,first_order_date, Order_Date) AS days_elapsed
+FROM CTE
+WHERE RN=3
+GO
+
+
+
+---mehmet3642
+SELECT	DISTINCT Cust_ID, order_date,
+		DENSE_RANK () OVER (PARTITION BY Cust_ID ORDER BY order_date) AS order_number
+INTO	#temp
+FROM	combined_table
+SELECT	*
+FROM	#temp
+SELECT  DISTINCT Cust_ID, order_date, order_number,
+		FIRST_VALUE (order_date) OVER (PARTITION BY Cust_ID ORDER BY order_number) AS first_order
+INTO	#temp_1
+FROM	#temp
+SELECT	DISTINCT Cust_ID, first_order,
+		IIF (order_number=3, order_date, NULL) AS third_order
+INTO	#temp_2
+FROM	#temp_1
+SELECT	*
+FROM	#temp_2
+SELECT	DISTINCT Cust_ID,
+		DATEDIFF (DAY, first_order, third_order) AS time_between_first_and_third_purchase
+FROM	#temp_2
+ORDER BY  Cust_ID
+
 
 
 --7.Write a query that returns customers who purchased both product 11 and product 14,
@@ -112,6 +187,8 @@ where Prod_ID = 'Prod_11' or Prod_ID = 'Prod_14'
 select *, cast (round( 100.0 * Prod_Sum_Quantity/Sum_Quantity, 2) as numeric (4,2)) as percent_sum
 from t3
 order by 5 desc;
+--soruyu yanlýþ anlamýþým :)
+
 
 
 
@@ -135,6 +212,9 @@ from combined_table;
 
 
 select * from visit_logs;
+
+
+
 
 
 -- Her müþteri ziyareti için,  bir sonraki ziyaretini ayrý bir sütun olarak oluþturdum. 
@@ -224,6 +304,7 @@ Raporlamada;
 
 
 */
+
 create view customer_segmentation
 as
 select *
@@ -236,6 +317,10 @@ select *
 		end as customer_categorise
 
 from visit_avg;
+
+select Cust_ID,customer_categorise
+from customer_segmentation
+
 
 
 --Month-Wise Retention Rate
@@ -251,3 +336,8 @@ select	cast (
 				(select count(distinct Cust_ID) from cust_dimen)) 
 as numeric (4,2)
 				) as Retention_Rate ;
+
+
+
+
+---
